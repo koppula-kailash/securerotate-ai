@@ -952,7 +952,6 @@ async def execute_credential_rotation(
         ),
         "owner_email": owner_email,
         "email_dispatched": True,
-        "new_password_preview": new_plaintext_password,
         "new_expiry": new_expiry.isoformat(),
         "latency_ms": latency_ms,
         "verification_latency_ms": latency_ms,
