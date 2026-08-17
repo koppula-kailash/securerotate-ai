@@ -1,0 +1,22 @@
+# Render Infrastructure Specification (Non-Docker Native Python)
+services:
+  - type: web
+    name: securerotate-ai
+    env: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: VAULT_ENCRYPTION_KEY
+        value: N0Y4Z1o4bUZXdWpxTzN0Y3FqYmxWUGpSMWdYVkx5V2M=
+      - key: SECRET_PROVIDER_TYPE
+        value: LOCAL
+      - key: SYSTEM_DB_NAME
+        value: securerotate_db
+      - key: TARGET_DEMO_DB_NAME
+        value: target_demo_db

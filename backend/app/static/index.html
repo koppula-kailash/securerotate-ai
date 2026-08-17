@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureRotate AI — Enterprise Database Credential Lifecycle & Auto-Rotation</title>
+  <meta name="description" content="AI-Powered Database Credential Lifecycle Management System. Automated risk prediction, expiry monitoring, zero-downtime rotation, and automatic rollback." />
+  
+  <!-- Premium Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- React 18 Standalone -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #060913;
+      --bg-surface: #0b1120;
+      --card-bg: #111a2e;
+      --card-bg-hover: #17243e;
+      --card-border: #1e2d4a;
+      --card-border-glow: #3b82f6;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-purple: #a855f7;
+      --accent-emerald: #10b981;
+      --color-success: #10b981;
+      --color-warning: #f59e0b;
+      --color-high: #f97316;
+      --color-critical: #ef4444;
+      --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-family);
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-dark); }
+    ::-webkit-scrollbar-thumb { background: #1e2d4a; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+
+    /* Keyframes & Animations */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.8; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.04); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .app-container { display: flex; min-height: 100vh; }
+
+    /* Sidebar Navigation */
+    .sidebar {
+      width: 270px;
+      min-width: 270px;
+      max-width: 270px;
+      background: rgba(11, 17, 32, 0.95);
+      backdrop-filter: blur(12px);
+      border-right: 1px solid var(--card-border);
+      padding: 1.25rem 1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      max-height: 100vh;
+      z-index: 50;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .sidebar-menu-area {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      margin-bottom: 0.75rem;
+      padding-right: 4px;
+    }
+
+    .sidebar-footer-card {
+      flex-shrink: 0;
+      margin-top: auto;
+      padding: 0.9rem;
+      background: #0a1120;
+      border-radius: 14px;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.5rem 0.5rem 1.5rem 0.5rem;
+      border-bottom: 1px solid rgba(30, 45, 74, 0.8);
+      margin-bottom: 1.25rem;
+    }
+    .brand-logo {
+      width: 42px; height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+    }
+    .brand-title {
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-list { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.7rem 0.9rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .nav-item:hover {
+      background: var(--card-bg-hover);
+      color: var(--text-main);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(139, 92, 246, 0.15));
+      color: #60a5fa;
+      border-color: rgba(59, 130, 246, 0.4);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+    }
+    .nav-item .nav-badge {
+      margin-left: auto;
+      background: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+      font-size: 0.72rem;
+      padding: 0.15rem 0.55rem;
+      border-radius: 12px;
+      font-weight: 800;
+    }
+
+    /* Main Content */
+    .main-content { flex: 1; padding: 2rem 2.5rem; overflow-y: auto; }
+
+    .top-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .page-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; color: #ffffff; }
+    .page-subtitle { font-size: 0.88rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+    .role-switcher-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: #0e172a;
+      border: 1px solid var(--card-border);
+      padding: 0.4rem 0.85rem;
+      border-radius: 12px;
+      font-size: 0.82rem;
+    }
+
+    /* Cards & Grid Layouts */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.35rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      transition: all 0.25s ease;
+      animation: fadeInUp 0.35s ease-out forwards;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), transparent);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .stat-card:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+    .stat-card:hover::before { opacity: 1; }
+
+    .stat-label { font-size: 0.82rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .stat-value { font-size: 2.1rem; font-weight: 900; letter-spacing: -0.03em; }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.28rem 0.65rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-low, .badge-success { background: rgba(16, 185, 129, 0.14); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-medium, .badge-warning { background: rgba(245, 158, 11, 0.14); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-high { background: rgba(249, 115, 22, 0.14); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); }
+    .badge-critical { background: rgba(239, 68, 68, 0.14); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-purple { background: rgba(168, 85, 247, 0.14); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+    .badge-info { background: rgba(59, 130, 246, 0.14); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      font-family: var(--font-family);
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3); }
+    .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45); transform: translateY(-1px); }
+
+    .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+    .btn-success:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45); transform: translateY(-1px); }
+
+    .btn-purple { background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3); }
+    .btn-purple:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45); transform: translateY(-1px); }
+
+    .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3); }
+    .btn-danger:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(239, 68, 68, 0.45); }
+
+    .btn-secondary { background: #1a263d; color: var(--text-main); border: 1px solid var(--card-border); }
+    .btn-secondary:hover:not(:disabled) { background: #243452; border-color: #3b82f6; }
+
+    .btn-ghost { background: transparent; color: var(--text-muted); }
+    .btn-ghost:hover { color: var(--text-main); background: rgba(30, 45, 74, 0.5); }
+
+    .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 8px; }
+
+    /* Tables */
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .table-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(11, 17, 32, 0.6);
+    }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th {
+      background: #0c1322;
+      padding: 0.85rem 1.5rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 800;
+      border-bottom: 1px solid var(--card-border);
+    }
+    td {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid rgba(30, 45, 74, 0.5);
+      font-size: 0.9rem;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(23, 36, 62, 0.6); }
+
+    /* Inputs */
+    .input-field {
+      width: 100%;
+      background: #0a1120;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 0.7rem 1rem;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      font-family: var(--font-family);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .input-field:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+    .form-label { display: block; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 600; }
+
+    /* Modals & Alerts */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(4, 8, 18, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; padding: 1.5rem;
+    }
+    .modal-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 2.25rem;
+      width: 100%; max-width: 480px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+      animation: fadeInUp 0.3s ease-out forwards;
+    }
+    .modal-card-lg { max-width: 720px; }
+
+    .alert-banner {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      border-radius: 14px;
+      padding: 1rem 1.35rem;
+      margin-bottom: 1.75rem;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.9rem;
+    }
+
+    /* Risk Gauge */
+    .risk-gauge-container { position: relative; width: 140px; height: 140px; margin: 0 auto; }
+    .risk-gauge-bg { stroke: #1e2d4a; fill: none; stroke-width: 11; }
+    .risk-gauge-fill { fill: none; stroke-width: 11; stroke-linecap: round; transition: stroke-dashoffset 0.8s ease; }
+    .risk-gauge-text { font-size: 2rem; font-weight: 900; fill: var(--text-main); text-anchor: middle; dominant-baseline: central; }
+
+    /* Workflow Timeline */
+    .workflow-steps {
+      display: flex; justify-content: space-between; gap: 0.75rem;
+      margin-bottom: 1.75rem; padding: 1.25rem;
+      background: #0a1120; border-radius: 16px;
+      border: 1px solid var(--card-border);
+    }
+    .wf-step { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-align: center; flex: 1; }
+    .wf-circle { width: 32px; height: 32px; border-radius: 50%; background: #17243e; display: flex; align-items: center; justify-content: center; font-weight: 800; border: 1px solid #243452; }
+    .wf-step.active .wf-circle { background: var(--accent-blue); color: white; border-color: #60a5fa; box-shadow: 0 0 12px rgba(59, 130, 246, 0.5); }
+    .wf-step.active { color: var(--text-main); }
+    .wf-step.completed .wf-circle { background: #10b981; color: white; border-color: #34d399; }
+
+    .step-check {
+      display: flex; align-items: center; gap: 0.85rem; padding: 0.7rem 0; font-size: 0.9rem; border-bottom: 1px solid rgba(30, 45, 74, 0.5);
+    }
+    .step-check:last-child { border-bottom: none; }
+    .step-icon {
+      width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 800; flex-shrink: 0;
+    }
+    .step-success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .step-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .step-running { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+    const API = '/api/v1';
+
+    /* ========================= AUTH FETCH WRAPPER ========================= */
+    async function authFetch(url, options = {}) {
+      const token = localStorage.getItem('sra_token');
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      };
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401 && !url.includes('/auth/login')) {
+        localStorage.removeItem('sra_token');
+        localStorage.removeItem('sra_user');
+        window.dispatchEvent(new CustomEvent('sra_session_expired'));
+      }
+      return res;
+    }
+
+    /* ========================= UTILITY HELPERS ========================= */
+    function daysRemaining(expiresAt) {
+      if (!expiresAt) return 999;
+      let str = String(expiresAt);
+      if (!str.endsWith('Z') && !str.includes('+') && !str.includes('-')) str += 'Z';
+      const exp = new Date(str);
+      if (isNaN(exp.getTime())) return 999;
+      const now = new Date();
+      const diff = exp.getTime() - now.getTime();
+      if (diff <= 0) return 0;
+      return Math.ceil(diff / (1000 * 3600 * 24));
+    }
+
+    function expiryBadge(days) {
+      if (days <= 0) return { class: 'badge-critical', text: 'EXPIRED' };
+      if (days <= 3) return { class: 'badge-critical', text: `${days}d — Emergency` };
+      if (days <= 7) return { class: 'badge-high', text: `${days}d — Critical` };
+      if (days <= 14) return { class: 'badge-warning', text: `${days}d — Warning` };
+      if (days <= 30) return { class: 'badge-info', text: `${days}d — Monitor` };
+      return { class: 'badge-success', text: `${days}d — Healthy` };
+    }
+
+    function riskBadgeClass(level) {
+      const l = (level || '').toUpperCase();
+      if (l === 'CRITICAL') return 'badge-critical';
+      if (l === 'HIGH') return 'badge-high';
+      if (l === 'MEDIUM') return 'badge-warning';
+      return 'badge-success';
+    }
+
+    function riskColor(level) {
+      const l = (level || '').toUpperCase();
+      if (l === 'CRITICAL') return '#ef4444';
+      if (l === 'HIGH') return '#f97316';
+      if (l === 'MEDIUM') return '#f59e0b';
+      return '#10b981';
+    }
+
+    function formatDate(dt) {
+      if (!dt) return '—';
+      return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    function formatDateTime(dt) {
+      if (!dt) return '—';
+      return new Date(dt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    /* ========================= RISK GAUGE COMPONENT ========================= */
+    function RiskGauge({ score, level }) {
+      const pct = Math.round((score || 0) * 100);
+      const radius = 54;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference - (pct / 100) * circumference;
+      const color = riskColor(level);
+      return (
+        <div className="risk-gauge-container">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <circle className="risk-gauge-bg" cx="70" cy="70" r={radius} />
+            <circle className="risk-gauge-fill" cx="70" cy="70" r={radius}
+              stroke={color}
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              transform="rotate(-90 70 70)" />
+            <text className="risk-gauge-text" x="70" y="65">{pct}</text>
+            <text x="70" y="90" textAnchor="middle" fill={color} fontSize="11" fontWeight="800">{level || 'N/A'}</text>
+          </svg>
+        </div>
+      );
+    }
+
+    /* ========================= MAIN APP ========================= */
+    function App() {
+      const [token, setToken] = useState(localStorage.getItem('sra_token') || '');
+      const [user, setUser] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('sra_user') || 'null'); }
+        catch(e) { return null; }
+      });
+      const [sessionExpiredMsg, setSessionExpiredMsg] = useState(false);
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [selectedCredId, setSelectedCredId] = useState(null);
+
+      const [credentials, setCredentials] = useState([]);
+      const [dashStats, setDashStats] = useState(null);
+      const [notifications, setNotifications] = useState([]);
+      const [approvals, setApprovals] = useState([]);
+      const [auditLogs, setAuditLogs] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      const logout = useCallback(async () => {
+        try { if (token) await authFetch(`${API}/auth/logout`, { method: 'POST' }); } catch(e){}
+        localStorage.removeItem('sra_token');
+        localStorage.removeItem('sra_user');
+        setToken(''); setUser(null);
+      }, [token]);
+
+      useEffect(() => {
+        const handleExpired = () => { setSessionExpiredMsg(true); logout(); };
+        window.addEventListener('sra_session_expired', handleExpired);
+        return () => window.removeEventListener('sra_session_expired', handleExpired);
+      }, [logout]);
+
+      const fetchData = useCallback(async () => {
+        if (!token) { setLoading(false); return; }
+        setLoading(true);
+        try {
+          const [creds, stats, notifs, apps, audits] = await Promise.all([
+            authFetch(`${API}/credentials`).then(r => r.ok ? r.json() : []).catch(() => []),
+            authFetch(`${API}/credentials/dashboard-stats`).then(r => r.ok ? r.json() : null).catch(() => null),
+            authFetch(`${API}/notifications`).then(r => r.ok ? r.json() : []).catch(() => []),
+            authFetch(`${API}/approvals`).then(r => r.ok ? r.json() : []).catch(() => []),
+            authFetch(`${API}/audit-logs`).then(r => r.ok ? r.json() : []).catch(() => []),
+          ]);
+          setCredentials(Array.isArray(creds) ? creds : []);
+          setDashStats(stats);
+          setNotifications(Array.isArray(notifs) ? notifs : []);
+          setApprovals(Array.isArray(apps) ? apps : []);
+          setAuditLogs(Array.isArray(audits) ? audits : []);
+        } catch(e) { console.error('Data fetch error:', e); }
+        finally { setLoading(false); }
+      }, [token]);
+
+      useEffect(() => { if (token) fetchData(); }, [token, fetchData]);
+
+      const navigate = (id, tab) => { setSelectedCredId(id); setActiveTab(tab); };
+
+      const handleQuickSwitchRole = async (targetRole) => {
+        let creds = { username: 'admin', email: 'admin@securerotate.local', password: 'Admin123!' };
+        if (targetRole === 'DEVOPS') creds = { username: 'devops', email: 'devops@securerotate.local', password: 'Devops123!' };
+        if (targetRole === 'AUDITOR') creds = { username: 'auditor', email: 'auditor@securerotate.local', password: 'Auditor123!' };
+        
+        try {
+          const res = await fetch(`${API}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username_or_email: creds.username, password: creds.password }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setToken(data.access_token);
+            setUser(data.user);
+            localStorage.setItem('sra_token', data.access_token);
+            localStorage.setItem('sra_user', JSON.stringify(data.user));
+          }
+        } catch(e){}
+      };
+
+      if (!token || !user) {
+        return <LoginScreen
+          sessionExpired={sessionExpiredMsg}
+          onLogin={(t, u) => {
+            setSessionExpiredMsg(false);
+            setToken(t); setUser(u);
+            localStorage.setItem('sra_token', t);
+            localStorage.setItem('sra_user', JSON.stringify(u));
+            setActiveTab('dashboard');
+          }}
+        />;
+      }
+
+      const role = (user.role || 'AUDITOR').toUpperCase();
+
+      const allNavs = [
+        { id: 'dashboard', icon: '📊', label: 'Dashboard', roles: ['ADMIN', 'DEVOPS', 'AUDITOR'] },
+        { id: 'credentials', icon: '🔑', label: 'Credentials', roles: ['ADMIN', 'DEVOPS'] },
+        { id: 'risk', icon: '🧠', label: 'AI Risk Engine', roles: ['ADMIN', 'DEVOPS', 'AUDITOR'] },
+        { id: 'impact', icon: '🌐', label: 'Dependency Graph', roles: ['ADMIN', 'DEVOPS', 'AUDITOR'] },
+        { id: 'rotation', icon: '⚡', label: 'Rotation Workflow', roles: ['ADMIN', 'DEVOPS'] },
+        { id: 'notifications', icon: '🔔', label: 'Notifications', badge: notifications.length || null, roles: ['ADMIN', 'DEVOPS', 'AUDITOR'] },
+        { id: 'audit', icon: '📜', label: 'Audit Trail', roles: ['ADMIN', 'DEVOPS', 'AUDITOR'] },
+        { id: 'users', icon: '👥', label: 'User Management', roles: ['ADMIN'] },
+      ];
+
+      const visibleNavs = allNavs.filter(nav => nav.roles.includes(role));
+
+      return (
+        <div className="app-container">
+          <aside className="sidebar">
+            <div className="sidebar-menu-area">
+              <div className="brand">
+                <div className="brand-logo">🛡️</div>
+                <div className="brand-title">SecureRotate AI</div>
+              </div>
+              <ul className="nav-list">
+                {visibleNavs.map(nav => (
+                  <li key={nav.id}
+                    className={`nav-item ${activeTab === nav.id ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab(nav.id);
+                      if (['risk','impact','rotation'].includes(nav.id) && !selectedCredId && credentials[0])
+                        setSelectedCredId(credentials[0].id);
+                    }}>
+                    {nav.icon} {nav.label}
+                    {nav.badge ? <span className="nav-badge">{nav.badge}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="sidebar-footer-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: '800' }}>Active Session</div>
+                <span className={`badge ${role === 'ADMIN' ? 'badge-purple' : role === 'DEVOPS' ? 'badge-info' : 'badge-warning'}`}>{role}</span>
+              </div>
+              <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.username}</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email || `${user.username}@securerotate.local`}</div>
+              <button
+                id="sidebar-signout-btn"
+                onClick={logout}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  width: '100%',
+                  color: '#f87171',
+                  borderColor: 'rgba(239, 68, 68, 0.35)',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: '8px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.22)'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.35)'; }}
+              >
+                <span>🚪</span>
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </aside>
+
+          <main className="main-content">
+            <div className="top-header">
+              <div>
+                <h1 className="page-title">
+                  {activeTab === 'dashboard' && 'DB Security Operations Dashboard'}
+                  {activeTab === 'credentials' && 'Database Credentials Vault'}
+                  {activeTab === 'risk' && 'AI Risk Prediction Engine'}
+                  {activeTab === 'impact' && 'Dependency Impact Analysis'}
+                  {activeTab === 'rotation' && 'Automated Rotation & Rollback Workflow'}
+                  {activeTab === 'notifications' && 'Security Notification Center'}
+                  {activeTab === 'audit' && 'Security Audit Trail'}
+                  {activeTab === 'users' && 'User Management & Role Permissions'}
+                </h1>
+                <p className="page-subtitle">SecureRotate AI — Automated Credential Lifecycle System</p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div className="role-switcher-pill">
+                  <span style={{ color: '#94a3b8', fontWeight: '600' }}>Role:</span>
+                  <select
+                    style={{ background: 'none', border: 'none', color: '#60a5fa', fontWeight: '800', fontSize: '0.82rem', cursor: 'pointer', outline: 'none' }}
+                    value={role}
+                    onChange={e => handleQuickSwitchRole(e.target.value)}
+                  >
+                    <option value="ADMIN" style={{ background: '#0b1120', color: '#fff' }}>ADMIN (Full Access)</option>
+                    <option value="DEVOPS" style={{ background: '#0b1120', color: '#fff' }}>DEVOPS (Ops)</option>
+                    <option value="AUDITOR" style={{ background: '#0b1120', color: '#fff' }}>AUDITOR (Read-Only)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div style={{ padding: '5rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '1rem', animation: 'spin 2s infinite linear' }}>🛡️</div>
+                <div style={{ color: '#94a3b8', fontSize: '1rem', fontWeight: '600' }}>Synchronizing SecureRotate AI Engine...</div>
+              </div>
+            ) : (
+              <>
+                {activeTab === 'dashboard' && <DashboardView userRole={role} credentials={credentials} dashStats={dashStats} onNav={navigate} onRefresh={fetchData} />}
+                {activeTab === 'credentials' && <CredentialsView userRole={role} credentials={credentials} onRefresh={fetchData} onNav={navigate} onBack={() => setActiveTab('dashboard')} />}
+                {activeTab === 'risk' && <RiskView userRole={role} credentialId={selectedCredId} credentials={credentials} onSelectCred={setSelectedCredId} onNavRotation={() => setActiveTab('rotation')} onBack={() => setActiveTab('dashboard')} />}
+                {activeTab === 'impact' && <ImpactView userRole={role} credentialId={selectedCredId} credentials={credentials} onSelectCred={setSelectedCredId} onBack={() => setActiveTab('dashboard')} />}
+                {activeTab === 'rotation' && <RotationView userRole={role} credentialId={selectedCredId} credentials={credentials} approvals={approvals} onSelectCred={setSelectedCredId} onRefresh={fetchData} onBack={() => setActiveTab('dashboard')} />}
+                {activeTab === 'notifications' && <NotificationsView notifications={notifications} onRefresh={fetchData} onBack={() => setActiveTab('dashboard')} />}
+                {activeTab === 'audit' && <AuditView logs={auditLogs} onBack={() => setActiveTab('dashboard')} />}
+                {activeTab === 'users' && <UserManagementView userRole={role} onBack={() => setActiveTab('dashboard')} />}
+              </>
+            )}
+          </main>
+        </div>
+      );
+    }
+
+    /* ========================= LOGIN SCREEN ========================= */
+    function LoginScreen({ sessionExpired, onLogin }) {
+      const [isSignUp, setIsSignUp] = useState(false);
+      const [identifier, setIdentifier] = useState('admin@securerotate.local');
+      const [regUsername, setRegUsername] = useState('');
+      const [regEmail, setRegEmail] = useState('');
+      const [regRole, setRegRole] = useState('AUDITOR');
+      const [password, setPassword] = useState('Admin123!');
+      const [error, setError] = useState('');
+      const [successMsg, setSuccessMsg] = useState('');
+      const [submitting, setSubmitting] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError(''); setSuccessMsg(''); setSubmitting(true);
+        try {
+          if (isSignUp) {
+            // Register API Call
+            const regRes = await fetch(`${API}/auth/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: regUsername,
+                email: regEmail,
+                password: password,
+                role: regRole,
+              }),
+            });
+            if (!regRes.ok) {
+              const errData = await regRes.json();
+              setError(errData.detail || 'Registration failed');
+              setSubmitting(false);
+              return;
+            }
+            setSuccessMsg('Account created successfully! Signing in...');
+            // Automatically log in
+            const loginRes = await fetch(`${API}/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username_or_email: regUsername, password: password }),
+            });
+            if (loginRes.ok) {
+              const data = await loginRes.json();
+              setTimeout(() => {
+                onLogin(data.access_token, data.user);
+              }, 600);
+            }
+          } else {
+            // Login API Call
+            const res = await fetch(`${API}/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username_or_email: identifier, password: password }),
+            });
+            if (!res.ok) { setError('Invalid username or password'); setSubmitting(false); return; }
+            const data = await res.json();
+            onLogin(data.access_token, data.user);
+          }
+        } catch (err) { setError(err.message || 'Authentication error'); }
+        finally { setSubmitting(false); }
+      };
+
+      const fillDemo = (id, pw) => { setIsSignUp(false); setIdentifier(id); setPassword(pw); setError(''); setSuccessMsg(''); };
+
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#060913', padding: '1.5rem' }}>
+          <div className="modal-card" style={{ margin: 'auto', border: '1px solid var(--card-border)', maxWidth: '480px', width: '100%' }}>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ width: '56px', height: '56px', margin: '0 auto 1rem auto', borderRadius: '16px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', boxShadow: '0 8px 24px rgba(59,130,246,0.4)' }}>🛡️</div>
+              <h2 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.03em' }}>SecureRotate AI</h2>
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '0.3rem' }}>Enterprise Database Credential Lifecycle & Password Rotation</p>
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div style={{ display: 'flex', background: '#0a1120', borderRadius: '10px', padding: '4px', marginBottom: '1.25rem', border: '1px solid var(--card-border)' }}>
+              <button
+                type="button"
+                style={{ flex: 1, padding: '0.6rem', border: 'none', borderRadius: '8px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer', background: !isSignUp ? 'var(--accent-blue)' : 'transparent', color: !isSignUp ? '#fff' : '#94a3b8' }}
+                onClick={() => { setIsSignUp(false); setError(''); setSuccessMsg(''); }}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                style={{ flex: 1, padding: '0.6rem', border: 'none', borderRadius: '8px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer', background: isSignUp ? 'var(--accent-blue)' : 'transparent', color: isSignUp ? '#fff' : '#94a3b8' }}
+                onClick={() => { setIsSignUp(true); setError(''); setSuccessMsg(''); }}
+              >
+                Create Account (Sign Up)
+              </button>
+            </div>
+
+            {sessionExpired && <div className="alert-banner" style={{ background: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)', color: '#fbbf24' }}>Session expired. Please sign in again.</div>}
+            {error && <div className="alert-banner">❌ {error}</div>}
+            {successMsg && <div className="alert-banner" style={{ background: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.35)', color: '#34d399' }}>✅ {successMsg}</div>}
+
+            <form onSubmit={handleSubmit}>
+              {isSignUp ? (
+                <>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Username</label>
+                    <input type="text" className="input-field" required placeholder="johndoe" value={regUsername} onChange={e => setRegUsername(e.target.value)} />
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Email Address</label>
+                    <input type="email" className="input-field" required placeholder="john@example.com" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Assign Role</label>
+                    <select className="input-field" value={regRole} onChange={e => setRegRole(e.target.value)}>
+                      <option value="AUDITOR">AUDITOR (Read-Only / Compliance)</option>
+                      <option value="DEVOPS">DEVOPS (Credential & Rotation Mgmt)</option>
+                      <option value="ADMIN">ADMIN (Full Access & User Mgmt)</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label">Email or Username</label>
+                  <input type="text" className="input-field" required placeholder="admin@securerotate.local" value={identifier} onChange={e => setIdentifier(e.target.value)} />
+                </div>
+              )}
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Password</label>
+                <input type="password" className="input-field" required placeholder="Enter password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} />
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.85rem' }} disabled={submitting}>
+                {submitting ? 'Processing...' : isSignUp ? 'Create New Account' : 'Sign In'}
+              </button>
+            </form>
+
+            <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--card-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.75rem', textAlign: 'center', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Instant One-Click Demo Logins</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <button type="button" className="btn btn-secondary btn-sm" style={{ justifyContent: 'space-between' }} onClick={() => fillDemo('admin@securerotate.local', 'Admin123!')}>
+                  <span>👤 <strong>Admin Account</strong> (Full Access + Users)</span>
+                  <span className="badge badge-purple">ADMIN</span>
+                </button>
+                <button type="button" className="btn btn-secondary btn-sm" style={{ justifyContent: 'space-between' }} onClick={() => fillDemo('devops@securerotate.local', 'Devops123!')}>
+                  <span>👤 <strong>DevOps Account</strong> (Credentials & Rotation)</span>
+                  <span className="badge badge-info">DEVOPS</span>
+                </button>
+                <button type="button" className="btn btn-secondary btn-sm" style={{ justifyContent: 'space-between' }} onClick={() => fillDemo('auditor@securerotate.local', 'Auditor123!')}>
+                  <span>👤 <strong>Auditor Account</strong> (Read-Only Audit)</span>
+                  <span className="badge badge-warning">AUDITOR</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ========================= DASHBOARD ========================= */
+    function DashboardView({ userRole, credentials, dashStats, onNav, onRefresh }) {
+      const ds = dashStats || {};
+      const total = ds.total_databases || credentials.length;
+      const healthy = ds.healthy || 0;
+      const warning = ds.warning || 0;
+      const critical = ds.critical || 0;
+      const expired = ds.expired || 0;
+
+      const [seeding, setSeeding] = useState(false);
+
+      const handleSeed = async () => {
+        setSeeding(true);
+        try {
+          await authFetch(`${API}/credentials/seed-demo-data?force=true`, { method: 'POST' });
+          await onRefresh();
+        } catch(e){}
+        setSeeding(false);
+      };
+
+      return (
+        <div>
+          <div className="stats-grid">
+            <div className="stat-card"><span className="stat-label">Total Managed DBs</span><span className="stat-value">{total}</span></div>
+            <div className="stat-card"><span className="stat-label">🟢 Healthy</span><span className="stat-value" style={{ color: '#10b981' }}>{healthy}</span></div>
+            <div className="stat-card"><span className="stat-label">🟡 Warning (≤ 7d)</span><span className="stat-value" style={{ color: '#f59e0b' }}>{warning}</span></div>
+            <div className="stat-card"><span className="stat-label">🔴 Critical (≤ 3d)</span><span className="stat-value" style={{ color: '#ef4444' }}>{critical}</span></div>
+            <div className="stat-card"><span className="stat-label">⚫ Expired</span><span className="stat-value" style={{ color: '#f87171' }}>{expired}</span></div>
+          </div>
+
+          <div className="table-card">
+            <div className="table-header">
+              <h3 style={{ fontWeight: '800' }}>Enterprise Database Credential Overview</h3>
+              {['ADMIN','DEVOPS'].includes(userRole) && (
+                <button className="btn btn-purple btn-sm" onClick={handleSeed} disabled={seeding}>
+                  {seeding ? '⏳ Seeding 24 DBs...' : '🔄 Reset Demo Databases (24 DBs)'}
+                </button>
+              )}
+            </div>
+            <table>
+              <thead><tr><th>Credential Name</th><th>Database</th><th>Environment</th><th>Expiry Proximity</th><th>AI Risk Score</th><th>Actions</th></tr></thead>
+              <tbody>
+                {credentials.map(c => {
+                  const days = daysRemaining(c.expires_at);
+                  const eb = expiryBadge(days);
+                  return (
+                    <tr key={c.id}>
+                      <td><strong>{c.name}</strong></td>
+                      <td>{c.database_type}</td>
+                      <td>{c.environment}</td>
+                      <td><span className={`badge ${eb.class}`}>{eb.text}</span></td>
+                      <td><span className={`badge ${riskBadgeClass(c.risk_level)}`}>{c.risk_level || 'MEDIUM'} {c.risk_score ? `(${Math.round(c.risk_score*100)}%)` : ''}</span></td>
+                      <td style={{ display: 'flex', gap: '0.4rem' }}>
+                        {['ADMIN','DEVOPS'].includes(userRole) ? (
+                          <button className="btn btn-purple btn-sm" onClick={() => onNav(c.id, 'rotation')}>⚡ Rotate</button>
+                        ) : null}
+                        <button className="btn btn-secondary btn-sm" onClick={() => onNav(c.id, 'risk')}>🧠 Risk</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    /* ========================= CREDENTIALS ========================= */
+    function CredentialsView({ userRole, credentials, onRefresh, onNav, onBack }) {
+      const [search, setSearch] = useState('');
+      const [showModal, setShowModal] = useState(false);
+      const getDefaultExpiry = (days = 90) => {
+        const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().substring(0, 10);
+      };
+      const [form, setForm] = useState({ name: '', database_type: 'MySQL', host: '127.0.0.1', port: 3306, database_name: '', username: '', password: '', environment: 'Production', privilege_level: 'HIGH', owner_email: '', expires_at: getDefaultExpiry(90), auto_rotation_enabled: false });
+
+      const filtered = credentials.filter(c => [c.name, c.database_type, c.environment, c.owner_email].some(f => (f||'').toLowerCase().includes(search.toLowerCase())));
+
+      const handleCreate = async (e) => {
+        e.preventDefault();
+        const expiryDateStr = form.expires_at.includes('T') ? form.expires_at : `${form.expires_at}T23:59:59Z`;
+        const payload = {
+          ...form,
+          port: parseInt(form.port)||3306,
+          expires_at: new Date(expiryDateStr).toISOString(),
+          auto_rotation_enabled: form.auto_rotation_enabled || false,
+        };
+        const res = await authFetch(`${API}/credentials`, { method: 'POST', body: JSON.stringify(payload) });
+        if (res.ok) {
+          setShowModal(false);
+          await onRefresh();
+        }
+      };
+
+      const handleDelete = async (id) => {
+        if (!confirm('Delete credential?')) return;
+        const res = await authFetch(`${API}/credentials/${id}`, { method: 'DELETE' });
+        if (res.ok) onRefresh();
+      };
+
+      return (
+        <div>
+          <div className="table-card">
+            <div className="table-header">
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <button className="btn btn-secondary btn-sm" onClick={onBack}>← Back</button>
+                <input type="text" className="input-field" style={{ width: '280px' }} placeholder="🔍 Search credentials..." value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              {['ADMIN','DEVOPS'].includes(userRole) && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Register Credential</button>}
+            </div>
+            <table>
+              <thead><tr><th>Name</th><th>Type</th><th>Host & Port</th><th>Owner Email</th><th>Environment</th><th>Expiry</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                {filtered.map(c => {
+                  const days = daysRemaining(c.expires_at);
+                  const eb = expiryBadge(days);
+                  return (
+                    <tr key={c.id}>
+                      <td>
+                        <strong>{c.name}</strong>
+                        {c.auto_rotation_enabled && <div style={{ fontSize: '0.68rem', color: '#06b6d4', fontWeight: '700' }}>🤖 Auto-Rotate ON</div>}
+                      </td>
+                      <td>{c.database_type}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{c.host}:{c.port}</td>
+                      <td style={{ color: '#06b6d4', fontSize: '0.82rem', fontFamily: 'var(--font-mono)' }}>📧 {c.owner_email || 'admin@securerotate.local'}</td>
+                      <td>{c.environment}</td>
+                      <td><span className={`badge ${eb.class}`}>{eb.text}</span></td>
+                      <td><span className="badge badge-success">{c.status}</span></td>
+                      <td style={{ display: 'flex', gap: '0.35rem' }}>
+                        <button className="btn btn-purple btn-sm" onClick={() => onNav(c.id, 'rotation')}>Rotate</button>
+                        {userRole === 'ADMIN' && <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c.id)}>Delete</button>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {showModal && (
+            <div className="modal-overlay">
+              <div className="modal-card modal-card-lg">
+                <h3 style={{ fontWeight: '800', marginBottom: '1.5rem' }}>Register Database Credential</h3>
+                <form onSubmit={handleCreate}>
+                  <div className="grid-2">
+                    <div><label className="form-label">Name *</label><input className="input-field" required value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Payment DB" /></div>
+                    <div><label className="form-label">DB Type *</label><select className="input-field" value={form.database_type} onChange={e => setForm({...form, database_type: e.target.value})}><option>MySQL</option><option>PostgreSQL</option><option>MongoDB</option></select></div>
+                    <div><label className="form-label">Host *</label><input className="input-field" required value={form.host} onChange={e => setForm({...form, host: e.target.value})} placeholder="127.0.0.1" /></div>
+                    <div><label className="form-label">Port *</label><input className="input-field" type="number" required value={form.port} onChange={e => setForm({...form, port: e.target.value})} /></div>
+                    <div><label className="form-label">DB Name *</label><input className="input-field" required value={form.database_name} onChange={e => setForm({...form, database_name: e.target.value})} placeholder="production_db" /></div>
+                    <div><label className="form-label">Username *</label><input className="input-field" required value={form.username} onChange={e => setForm({...form, username: e.target.value})} placeholder="db_user" /></div>
+                    <div><label className="form-label">Password *</label><input className="input-field" type="password" required value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="••••••••••••" /></div>
+                    <div><label className="form-label">Owner / Notification Email *</label><input className="input-field" type="email" required value={form.owner_email} onChange={e => setForm({...form, owner_email: e.target.value})} placeholder="dba@company.com" /></div>
+                    <div><label className="form-label">Environment *</label><select className="input-field" value={form.environment} onChange={e => setForm({...form, environment: e.target.value})}><option>Production</option><option>Staging</option><option>Development</option></select></div>
+                    <div><label className="form-label">Privilege Level *</label><select className="input-field" value={form.privilege_level} onChange={e => setForm({...form, privilege_level: e.target.value})}><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>ADMIN</option></select></div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <label className="form-label" style={{ margin: 0 }}>Expiry Date *</label>
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }} onClick={() => setForm({...form, expires_at: getDefaultExpiry(30)})}>+30d</button>
+                          <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }} onClick={() => setForm({...form, expires_at: getDefaultExpiry(60)})}>+60d</button>
+                          <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }} onClick={() => setForm({...form, expires_at: getDefaultExpiry(90)})}>+90d</button>
+                          <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }} onClick={() => setForm({...form, expires_at: getDefaultExpiry(180)})}>+180d</button>
+                          <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }} onClick={() => setForm({...form, expires_at: getDefaultExpiry(365)})}>+1yr</button>
+                        </div>
+                      </div>
+                      <input className="input-field" type="date" required value={form.expires_at} onChange={e => setForm({...form, expires_at: e.target.value})} />
+                    </div>
+                    <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#0a1120', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--card-border)' }}>
+                      <input type="checkbox" id="auto_rot_cb" checked={form.auto_rotation_enabled} onChange={e => setForm({...form, auto_rotation_enabled: e.target.checked})} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                      <label htmlFor="auto_rot_cb" style={{ margin: 0, fontSize: '0.85rem', color: '#f8fafc', cursor: 'pointer' }}>
+                        <strong>Enable AI Auto-Rotation</strong> (Automatically rotates and verifies password when expired or critical ≤ 1 day)
+                      </label>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                    <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Credential</button>
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ========================= AI RISK ENGINE ========================= */
+    function RiskView({ userRole, credentialId, credentials, onSelectCred, onNavRotation, onBack }) {
+      const [riskData, setRiskData] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const cred = credentials.find(c => c.id === credentialId) || credentials[0];
+
+      useEffect(() => {
+        if (cred) {
+          setLoading(true);
+          authFetch(`${API}/risk/credentials/${cred.id}`).then(r => r.json()).then(d => { setRiskData(d); setLoading(false); }).catch(() => setLoading(false));
+        }
+      }, [cred]);
+
+      if (!cred) return <div style={{ padding: '2rem', color: '#94a3b8' }}>No credentials available.</div>;
+
+      const days = daysRemaining(cred.expires_at);
+
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <button className="btn btn-secondary btn-sm" onClick={onBack}>← Back to Dashboard</button>
+            <select className="input-field" style={{ width: '300px', margin: 0 }} value={cred.id} onChange={e => onSelectCred(Number(e.target.value))}>
+              {credentials.map(c => <option key={c.id} value={c.id}>{c.name} ({c.environment})</option>)}
+            </select>
+          </div>
+
+          <div className="grid-2">
+            <div className="stat-card">
+              <h3 style={{ fontWeight: '800', marginBottom: '1rem' }}>AI Risk Score & Explanation</h3>
+              <RiskGauge score={riskData?.risk_score || cred.risk_score} level={riskData?.risk_level || cred.risk_level} />
+              <div style={{ margin: '1.25rem 0', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                <span className={`badge ${riskBadgeClass(riskData?.risk_level)}`}>{riskData?.risk_level || 'N/A'}</span>
+                <span className="badge badge-info">98% ML Confidence</span>
+              </div>
+
+              <h4 style={{ fontSize: '0.88rem', fontWeight: '800', marginBottom: '0.6rem', color: '#ffffff' }}>Risk Factors Checklist</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.25rem' }}>
+                {(riskData?.reasons || [`Expires in ${days} days`, `Belongs to ${cred.environment} environment`, `Privilege: ${cred.privilege_level}`]).map((r, i) => (
+                  <div className="step-check" key={i}>
+                    <div className="step-icon step-running">⚡</div>
+                    <div>{r}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ background: '#0a1120', padding: '1.1rem', borderRadius: '12px', border: '1px solid var(--card-border)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: '800', textTransform: 'uppercase' }}>🧠 AI Recommendation</div>
+                <div style={{ fontSize: '0.9rem', color: '#e0e7ff', marginTop: '0.4rem', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+                  {riskData?.recommendation_text || riskData?.recommendation || 'Evaluating ML recommendation...'}
+                </div>
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <h3 style={{ fontWeight: '800', marginBottom: '1rem' }}>Credential Security Parameters</h3>
+              {[
+                ['Credential Name', cred.name],
+                ['Database Type', cred.database_type],
+                ['Host & Port', `${cred.host}:${cred.port}`],
+                ['Database Name', cred.database_name],
+                ['Username', cred.username],
+                ['Password', <span style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>[ Fernet Encrypted ]</span>],
+                ['Environment', cred.environment],
+                ['Privilege Level', cred.privilege_level],
+                ['Expires At', formatDate(cred.expires_at)],
+                ['Days Remaining', `${days} day(s)`],
+              ].map(([l, v], i) => (
+                <div className="info-row" key={i}><span className="info-label">{l}</span><span className="info-value">{v}</span></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ========================= DEPENDENCY GRAPH ========================= */
+    function ImpactView({ credentialId, credentials, onSelectCred, onBack }) {
+      const [deps, setDeps] = useState([]);
+      const [showAddModal, setShowAddModal] = useState(false);
+      const [newSvc, setNewSvc] = useState({ service_name: '', service_type: 'Microservice', criticality: 'HIGH' });
+      const cred = credentials.find(c => c.id === credentialId) || credentials[0];
+
+      const loadDeps = useCallback(() => {
+        if (cred) {
+          authFetch(`${API}/credentials/${cred.id}/dependencies`).then(r => r.json()).then(d => setDeps(Array.isArray(d) ? d : [])).catch(() => setDeps([]));
+        }
+      }, [cred]);
+
+      useEffect(() => { loadDeps(); }, [loadDeps]);
+
+      if (!cred) return <div style={{ padding: '2rem', color: '#94a3b8' }}>No credentials selected.</div>;
+
+      const handleAddDep = async (e) => {
+        e.preventDefault();
+        await authFetch(`${API}/dependencies`, {
+          method: 'POST',
+          body: JSON.stringify({ credential_id: cred.id, environment: cred.environment, ...newSvc }),
+        });
+        setShowAddModal(false);
+        setNewSvc({ service_name: '', service_type: 'Microservice', criticality: 'HIGH' });
+        loadDeps();
+      };
+
+      const critCount = deps.filter(d => d.criticality === 'CRITICAL').length;
+      const highCount = deps.filter(d => d.criticality === 'HIGH').length;
+      const totalBlastRadius = deps.reduce((acc, d) => acc + (d.impact_score || 0.5), 0);
+      const avgImpact = deps.length > 0 ? Math.min(100, Math.round((totalBlastRadius / deps.length) * 100)) : 0;
+
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <button className="btn btn-secondary btn-sm" onClick={onBack}>← Back to Dashboard</button>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <select className="input-field" style={{ width: '300px', margin: 0 }} value={cred.id} onChange={e => onSelectCred(Number(e.target.value))}>
+                {credentials.map(c => <option key={c.id} value={c.id}>{c.name} ({c.environment})</option>)}
+              </select>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>+ Map New Service</button>
+            </div>
+          </div>
+
+          {/* Visual SVG Topology Graph */}
+          <div className="table-card" style={{ marginBottom: '1.5rem', background: '#070b16', padding: '1.5rem', border: '1px solid var(--card-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ fontWeight: '800', fontSize: '1.1rem', color: '#ffffff' }}>🌐 Live Downstream Topology & Blast Radius</h3>
+                <p style={{ color: '#94a3b8', fontSize: '0.82rem' }}>Interactive architecture map for <strong>{cred.name}</strong> ({cred.environment})</p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <span className="badge badge-critical">{critCount} Critical Services</span>
+                <span className="badge badge-high">{highCount} High Priority</span>
+                <span className="badge badge-purple">Blast Severity: {avgImpact}%</span>
+              </div>
+            </div>
+
+            {/* Visual Node Grid */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2.5rem', padding: '2rem 1rem', background: 'radial-gradient(circle at center, rgba(59,130,246,0.08) 0%, transparent 70%)', borderRadius: '14px', border: '1px solid rgba(30,45,74,0.6)' }}>
+              
+              {/* Central DB Node */}
+              <div style={{ textAlign: 'center', position: 'relative' }}>
+                <div style={{ width: '90px', height: '90px', margin: '0 auto', borderRadius: '50%', background: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '2px solid #3b82f6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 30px rgba(59,130,246,0.4)' }}>
+                  <div style={{ fontSize: '1.8rem' }}>🗄️</div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#60a5fa' }}>{cred.database_type}</div>
+                </div>
+                <div style={{ fontWeight: '800', fontSize: '0.92rem', marginTop: '0.6rem', color: '#ffffff' }}>{cred.name}</div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>{cred.host}:{cred.port}</div>
+              </div>
+
+              {/* Connecting Connector Icon */}
+              <div style={{ color: '#3b82f6', fontSize: '1.5rem', fontWeight: '900', letterSpacing: '2px' }}>──────►</div>
+
+              {/* Dependent Microservices Cluster */}
+              <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: '0.85rem', maxHeight: '280px', overflowY: 'auto', padding: '0.5rem' }}>
+                {deps.length === 0 ? (
+                  <div style={{ color: '#64748b', fontSize: '0.88rem', padding: '2rem' }}>No downstream services mapped. Click "+ Map New Service" above to attach microservices.</div>
+                ) : (
+                  deps.map((d, i) => (
+                    <div key={i} style={{ flex: '1 1 calc(50% - 0.85rem)', minWidth: '220px', background: '#0d1527', border: `1px solid ${d.criticality === 'CRITICAL' ? 'rgba(239,68,68,0.4)' : d.criticality === 'HIGH' ? 'rgba(249,115,22,0.4)' : 'rgba(59,130,246,0.3)'}`, borderRadius: '12px', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+                      <div>
+                        <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#f8fafc' }}>
+                          {d.service_type === 'REST API' ? '⚡ ' : d.service_type === 'Async Worker' ? '⚙️ ' : '📦 '}{d.service_name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{d.service_type} · {d.environment}</div>
+                      </div>
+                      <span className={`badge badge-${(d.criticality||'').toLowerCase()}`}>{d.criticality}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Microservices Detail Table */}
+          <div className="table-card">
+            <div className="table-header"><h3 style={{ fontWeight: '800' }}>Active Downstream Service Inventory ({deps.length})</h3></div>
+            <table>
+              <thead><tr><th>Service Name</th><th>Service Type</th><th>Environment</th><th>Criticality</th><th>Impact Weight</th><th>Operational Status</th></tr></thead>
+              <tbody>
+                {deps.map((d, i) => (
+                  <tr key={i}>
+                    <td><strong>{d.service_name}</strong></td>
+                    <td>{d.service_type}</td>
+                    <td>{d.environment}</td>
+                    <td><span className={`badge badge-${(d.criticality||'').toLowerCase()}`}>{d.criticality}</span></td>
+                    <td><span className="badge badge-purple">{Math.round((d.impact_score || 0.5) * 100)}%</span></td>
+                    <td><span className="badge badge-success">{d.is_active ? 'HEALTHY & CONNECTED' : 'INACTIVE'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Add Dependency Modal */}
+          {showAddModal && (
+            <div className="modal-card" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 100, border: '1px solid var(--card-border)', background: '#0b1120', padding: '1.5rem', width: '420px', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <h3 style={{ fontWeight: '800' }}>Map Downstream Microservice</h3>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowAddModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleAddDep}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label">Microservice Name</label>
+                  <input type="text" className="input-field" required placeholder="e.g., Auth API Gateway" value={newSvc.service_name} onChange={e => setNewSvc({ ...newSvc, service_name: e.target.value })} />
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label">Service Type</label>
+                  <select className="input-field" value={newSvc.service_type} onChange={e => setNewSvc({ ...newSvc, service_type: e.target.value })}>
+                    <option value="REST API">REST API</option>
+                    <option value="Async Worker">Async Worker</option>
+                    <option value="Microservice">Microservice</option>
+                    <option value="Web App">Web App</option>
+                    <option value="Data Pipeline">Data Pipeline</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Criticality</label>
+                  <select className="input-field" value={newSvc.criticality} onChange={e => setNewSvc({ ...newSvc, criticality: e.target.value })}>
+                    <option value="CRITICAL">CRITICAL (High Blast Radius)</option>
+                    <option value="HIGH">HIGH (Major Business Function)</option>
+                    <option value="MEDIUM">MEDIUM (Standard Service)</option>
+                    <option value="LOW">LOW (Reporting / Non-critical)</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Register Dependency</button>
+              </form>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ========================= ROTATION WORKFLOW ========================= */
+    function RotationView({ userRole, credentialId, credentials, approvals, onSelectCred, onRefresh, onBack }) {
+      const cred = credentials.find(c => c.id === credentialId) || credentials[0];
+      const [rotResult, setRotResult] = useState(null);
+      const [executing, setExecuting] = useState(false);
+      const [errorMsg, setErrorMsg] = useState(null);
+
+      if (!cred) return <div style={{ padding: '2rem', color: '#94a3b8' }}>No credential selected.</div>;
+
+      const activeApproval = approvals.find(a => a.credential_id === cred.id && (a.status === 'PENDING' || a.status === 'APPROVED'));
+
+      const handleExecuteRotation = async (simFail = false) => {
+        setExecuting(true); setErrorMsg(null);
+        try {
+          // Auto-request and approve if missing
+          if (!activeApproval || activeApproval.status !== 'APPROVED') {
+            const reqRes = await authFetch(`${API}/rotation-requests`, { method: 'POST', body: JSON.stringify({ credential_id: cred.id, reason: 'Instant auto rotation' }) });
+            if (reqRes.ok) {
+              const reqData = await reqRes.json();
+              await authFetch(`${API}/approvals/${reqData.id}/approve`, { method: 'POST' });
+            }
+          }
+
+          const res = await authFetch(`${API}/rotation/${cred.id}${simFail ? '?simulate_failure=true' : ''}`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setRotResult({ status: 'ROLLED_BACK', message: data.detail || 'Rotation failed', steps: data.steps || [] });
+          } else {
+            setRotResult(data);
+          }
+          await onRefresh();
+        } catch(e) { setErrorMsg(e.message); }
+        finally { setExecuting(false); }
+      };
+
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <button className="btn btn-secondary btn-sm" onClick={onBack}>← Back to Dashboard</button>
+            <select className="input-field" style={{ width: '300px', margin: 0 }} value={cred.id} onChange={e => { setRotResult(null); onSelectCred(Number(e.target.value)); }}>
+              {credentials.map(c => <option key={c.id} value={c.id}>{c.name} ({c.environment})</option>)}
+            </select>
+          </div>
+
+          <div className="workflow-steps">
+            <div className={`wf-step ${rotResult ? 'completed' : 'active'}`}><div className="wf-circle">1</div><div>Request</div></div>
+            <div className={`wf-step ${rotResult ? 'completed' : 'active'}`}><div className="wf-circle">2</div><div>Approve</div></div>
+            <div className={`wf-step ${rotResult ? 'completed' : 'active'}`}><div className="wf-circle">3</div><div>Execute</div></div>
+            <div className={`wf-step ${rotResult ? 'completed' : 'active'}`}><div className="wf-circle">4</div><div>SELECT 1</div></div>
+            <div className={`wf-step ${rotResult?.status === 'SUCCESS' ? 'completed' : rotResult ? 'failed' : ''}`}><div className="wf-circle">{rotResult?.status === 'SUCCESS' ? '✓' : rotResult ? '✕' : '5'}</div><div>Complete</div></div>
+          </div>
+
+          {errorMsg && <div className="alert-banner">❌ Error: {errorMsg}</div>}
+
+          <div className="grid-2">
+            <div className="stat-card">
+              <h3 style={{ fontWeight: '800', marginBottom: '0.4rem' }}>Target: {cred.name}</h3>
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '1.5rem' }}>{cred.database_type} · {cred.host}:{cred.port} · User: {cred.username}</p>
+
+              <button className="btn btn-purple" style={{ padding: '0.9rem 1.25rem', fontSize: '1rem', width: '100%', marginBottom: '1rem' }} onClick={() => handleExecuteRotation(false)} disabled={executing}>
+                {executing ? '⚡ Rotating Password & Verifying...' : '⚡ One-Click Authorize & Execute Rotation'}
+              </button>
+
+              <button className="btn btn-secondary" style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#f87171', width: '100%' }} onClick={() => handleExecuteRotation(true)} disabled={executing}>
+                🧪 Simulate Verification Failure & Test Rollback
+              </button>
+            </div>
+
+            <div className="stat-card">
+              <h3 style={{ fontWeight: '800', marginBottom: '0.85rem' }}>Execution & Verification Log</h3>
+              {rotResult ? (
+                <div>
+                  <div style={{ padding: '1.25rem', borderRadius: '14px', background: rotResult.status === 'SUCCESS' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${rotResult.status === 'SUCCESS' ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'}`, marginBottom: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <h4 style={{ color: rotResult.status === 'SUCCESS' ? '#34d399' : '#f87171', fontWeight: '800', margin: 0 }}>
+                        {rotResult.status === 'SUCCESS' ? '✅ Rotation Successful (SELECT 1 Verified)' : '⚠️ Rotation Failed — Rolled Back Successfully'}
+                      </h4>
+                      <span className={`badge ${rotResult.status === 'SUCCESS' ? 'badge-success' : 'badge-danger'}`}>
+                        {rotResult.status === 'SUCCESS' ? 'HEALTHY' : 'ROLLED BACK'}
+                      </span>
+                    </div>
+
+                    <div style={{ background: '#0a1120', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--card-border)', marginBottom: '0.85rem', fontSize: '0.82rem', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ color: '#06b6d4', fontWeight: '700' }}>
+                        📧 Registered Mail: {rotResult.owner_email || cred.owner_email || 'admin@securerotate.local'}
+                      </div>
+                      <div style={{ color: '#94a3b8', marginTop: '0.2rem' }}>
+                        Status: <strong style={{ color: '#10b981' }}>Notification Sent & Audit Logged</strong>
+                      </div>
+                      {rotResult.new_expiry && (
+                        <div style={{ color: '#f59e0b', marginTop: '0.2rem' }}>
+                          New Expiry: <strong>{new Date(rotResult.new_expiry).toLocaleDateString()}</strong> (+90 Days Extended)
+                        </div>
+                      )}
+                    </div>
+
+                    {rotResult.steps?.map((s, i) => (
+                      <div className="step-check" key={i}>
+                        <div className={`step-icon ${s.status === 'SUCCESS' ? 'step-success' : 'step-failed'}`}>{s.status === 'SUCCESS' ? '✓' : '✕'}</div>
+                        <div>
+                          <div style={{ fontWeight: '700' }}>{s.label}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{s.detail}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setRotResult(null)}>
+                    🔄 Rotate Another Credential
+                  </button>
+                </div>
+              ) : (
+                <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                  Click <strong>"⚡ One-Click Authorize & Execute Rotation"</strong> to run the automated password rotation and SELECT 1 verification.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ========================= NOTIFICATIONS ========================= */
+    function NotificationsView({ notifications, onRefresh, onBack }) {
+      const [scanning, setScanning] = useState(false);
+      const handleScan = async () => { setScanning(true); await authFetch(`${API}/notifications/check-expiry`, { method: 'POST' }); await onRefresh(); setScanning(false); };
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <button className="btn btn-secondary btn-sm" onClick={onBack}>← Back to Dashboard</button>
+            <button className="btn btn-primary" onClick={handleScan} disabled={scanning}>{scanning ? 'Scanning...' : '🔍 Run Expiry Scan'}</button>
+          </div>
+          {notifications.map(n => (
+            <div className="stat-card" style={{ marginBottom: '0.85rem' }} key={n.id}>
+              <div style={{ fontWeight: '800' }}>{n.title}</div>
+              <div style={{ color: '#94a3b8', fontSize: '0.88rem' }}>{n.message}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ========================= AUDIT LOGS ========================= */
+    function AuditView({ logs, onBack }) {
+      return (
+        <div>
+          <div style={{ marginBottom: '1.5rem' }}><button className="btn btn-secondary btn-sm" onClick={onBack}>← Back to Dashboard</button></div>
+          <div className="table-card">
+            <div className="table-header"><h3 style={{ fontWeight: '800' }}>Security Audit Trail ({logs.length} Events)</h3></div>
+            <table>
+              <thead><tr><th>Timestamp</th><th>Event</th><th>Action</th><th>Status</th><th>Details</th></tr></thead>
+              <tbody>
+                {logs.map(log => (
+                  <tr key={log.id}>
+                    <td style={{ fontSize: '0.8rem', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>{formatDateTime(log.timestamp)}</td>
+                    <td><span className="badge badge-purple">{log.event_type}</span></td>
+                    <td>{log.action}</td>
+                    <td><span className={`badge ${log.status === 'SUCCESS' ? 'badge-success' : 'badge-critical'}`}>{log.status}</span></td>
+                    <td style={{ fontSize: '0.85rem' }}>{log.details}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    /* ========================= USER MANAGEMENT ========================= */
+    function UserManagementView({ userRole, onBack }) {
+      const [users, setUsers] = useState([]);
+      useEffect(() => { authFetch(`${API}/users`).then(r => r.json()).then(d => setUsers(Array.isArray(d) ? d : [])); }, []);
+
+      const handleChangeRole = async (u, newRole) => {
+        const res = await authFetch(`${API}/users/${u.id}`, { method: 'PUT', body: JSON.stringify({ role: newRole }) });
+        if (res.ok) authFetch(`${API}/users`).then(r => r.json()).then(d => setUsers(Array.isArray(d) ? d : []));
+      };
+
+      return (
+        <div>
+          <div style={{ marginBottom: '1.5rem' }}><button className="btn btn-secondary btn-sm" onClick={onBack}>← Back to Dashboard</button></div>
+          <div className="table-card">
+            <div className="table-header"><h3 style={{ fontWeight: '800' }}>System User Management ({users.length})</h3></div>
+            <table>
+              <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id}>
+                    <td><strong>{u.username}</strong></td>
+                    <td>{u.email}</td>
+                    <td>
+                      <select className="input-field" style={{ width: '130px', padding: '0.3rem' }} value={u.role} onChange={e => handleChangeRole(u, e.target.value)}>
+                        <option value="ADMIN">ADMIN</option><option value="DEVOPS">DEVOPS</option><option value="AUDITOR">AUDITOR</option>
+                      </select>
+                    </td>
+                    <td><span className="badge badge-success">{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
