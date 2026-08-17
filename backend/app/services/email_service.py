@@ -1,97 +1,156 @@
 """
 SecureRotate AI - Dedicated Email Notification Service
-Handles safe, non-blocking SMTP email dispatches for:
-1. Login success alerts
-2. Successful credential rotation alerts (WITHOUT plaintext passwords)
-3. Failed rotation and rollback alerts
-4. Expiry warning alerts (7-day, 3-day, 1-day, expired)
 
-All functions strictly guarantee:
-- Non-blocking execution: Email failures NEVER fail or interrupt the parent business operation.
-- Zero password/secret exposure in emails, logs, or traces.
-- Complete audit logging (LOGIN_EMAIL_SENT, ROTATION_EMAIL_SENT, EXPIRY_EMAIL_SENT, etc.).
+Handles safe, non-blocking email dispatches for:
+
+1. Login success alerts
+2. Successful credential rotation alerts
+3. Failed rotation and rollback alerts
+4. Expiry warning alerts
+
+Email provider:
+- Resend HTTPS API
+
+Security guarantees:
+- Email failures never interrupt the parent business operation.
+- Passwords and secrets are never included in emails.
+- Passwords and secrets are never logged.
+- Email audit events are recorded independently.
 """
 
 import logging
-import smtplib
-from email.message import EmailMessage
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
+
+import resend
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.audit import AuditLog
 
+
 logger = logging.getLogger("securerotate.email")
 
 
-def _get_smtp_settings() -> Dict[str, Any]:
-    """Extracts SMTP configurations with fallback alias support."""
-    host = getattr(settings, "SMTP_HOST", None)
-    port = int(getattr(settings, "SMTP_PORT", 587))
-    user = getattr(settings, "SMTP_USERNAME", None) or getattr(settings, "SMTP_USER", None)
-    password = getattr(settings, "SMTP_PASSWORD", None)
-    from_email = (
-        getattr(settings, "SMTP_FROM_EMAIL", None)
-        or getattr(settings, "SMTP_FROM", None)
-        or "alerts@securerotate.ai"
+# =========================================================================
+# RESEND CONFIGURATION
+# =========================================================================
+
+def _get_resend_settings() -> Dict[str, Any]:
+    """
+    Returns the Resend configuration.
+
+    The API key is only used internally and is never returned,
+    logged, or included in email content.
+    """
+
+    api_key = getattr(
+        settings,
+        "RESEND_API_KEY",
+        None,
     )
-    
-    use_tls_val = getattr(settings, "SMTP_USE_TLS", None)
-    if use_tls_val is not None:
-        use_tls = bool(use_tls_val)
-    else:
-        use_tls = bool(getattr(settings, "SMTP_TLS", True))
+
+    from_email = (
+        getattr(
+            settings,
+            "RESEND_FROM_EMAIL",
+            None,
+        )
+        or "onboarding@resend.dev"
+    )
 
     return {
-        "host": host,
-        "port": port,
-        "user": user,
-        "password": password,
+        "api_key": api_key,
         "from_email": from_email,
-        "use_tls": use_tls,
     }
 
 
-def send_raw_email(to_email: str, subject: str, body: str) -> bool:
+# =========================================================================
+# LOW-LEVEL EMAIL DISPATCH
+# =========================================================================
+
+async def send_raw_email(
+    to_email: str,
+    subject: str,
+    body: str,
+) -> bool:
     """
-    Sends an email using standard Python smtplib.
-    Never raises an exception; returns True on success and False on failure.
+    Sends an email through the Resend HTTPS API.
+
+    Never raises an exception.
+
+    Returns:
+        True  = Resend accepted the email
+        False = email delivery/submission failed
+
+    No passwords, API keys, or secrets are logged.
     """
+
+    # ---------------------------------------------------------------------
+    # Validate recipient
+    # ---------------------------------------------------------------------
+
     if not to_email or "@" not in str(to_email):
-        logger.warning(f"Invalid email address provided: {to_email}")
+        logger.warning(
+            "Invalid email address provided."
+        )
         return False
 
-    smtp_conf = _get_smtp_settings()
-    host = smtp_conf["host"]
+    # ---------------------------------------------------------------------
+    # Load Resend configuration
+    # ---------------------------------------------------------------------
 
-    if not host:
-        logger.info(
-            f"[MOCK EMAIL / LOG ONLY] (SMTP_HOST not configured)\n"
-            f"To: {to_email}\nSubject: {subject}\n\n{body}"
+    resend_conf = _get_resend_settings()
+
+    api_key = resend_conf["api_key"]
+    from_email = resend_conf["from_email"]
+
+    if not api_key:
+        logger.warning(
+            "RESEND_API_KEY is not configured."
         )
-        return True
+        return False
+
+    # ---------------------------------------------------------------------
+    # Send through Resend HTTPS API
+    # ---------------------------------------------------------------------
 
     try:
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = smtp_conf["from_email"]
-        msg["To"] = to_email
-        msg.set_content(body)
+        resend.api_key = api_key
 
-        with smtplib.SMTP(host, smtp_conf["port"], timeout=5) as server:
-            if smtp_conf["use_tls"]:
-                server.starttls()
-            if smtp_conf["user"] and smtp_conf["password"]:
-                server.login(smtp_conf["user"], smtp_conf["password"])
-            server.send_message(msg)
+        response = await resend.Emails.send_async(
+            {
+                "from": from_email,
+                "to": [to_email],
+                "subject": subject,
+                "text": body,
+            }
+        )
 
-        logger.info(f"Live SMTP email sent successfully to {to_email} with subject '{subject}'")
-        return True
-    except Exception as e:
-        logger.warning(f"Live SMTP email delivery to {to_email} failed: {e}")
+        logger.info(
+            "Email submitted successfully through Resend "
+            "to %s with subject '%s'.",
+            to_email,
+            subject,
+        )
+
+        return bool(response)
+
+    except Exception as error:
+        # Never log exception message because third-party errors
+        # could potentially contain sensitive request information.
+        logger.warning(
+            "Resend email delivery to %s failed: %s",
+            to_email,
+            type(error).__name__,
+        )
+
         return False
 
+
+# =========================================================================
+# EMAIL AUDIT LOGGING
+# =========================================================================
 
 async def log_email_audit(
     event_type: str,
@@ -101,9 +160,16 @@ async def log_email_audit(
     user_id: Optional[int] = None,
     credential_id: Optional[int] = None,
 ) -> None:
-    """Safely logs email audit events asynchronously without blocking caller."""
+    """
+    Safely records email audit events asynchronously.
+
+    Failure to write an email audit event never interrupts
+    the parent business operation.
+    """
+
     try:
         async with AsyncSessionLocal() as session:
+
             entry = AuditLog(
                 user_id=user_id,
                 credential_id=credential_id,
@@ -112,15 +178,23 @@ async def log_email_audit(
                 status=status,
                 details=details,
             )
+
             session.add(entry)
+
             await session.commit()
-    except Exception as e:
-        logger.error(f"Failed to record email audit log: {e}")
+
+    except Exception as error:
+
+        logger.error(
+            "Failed to record email audit log: %s",
+            type(error).__name__,
+        )
 
 
 # =========================================================================
 # FEATURE 1: LOGIN SUCCESS EMAIL
 # =========================================================================
+
 async def send_login_success_email(
     to_email: str,
     username: str,
@@ -129,13 +203,24 @@ async def send_login_success_email(
     timestamp: Optional[str] = None,
 ) -> bool:
     """
-    Dispatches login success email to registered user upon successful authentication.
+    Dispatches login success email to registered user
+    after successful authentication.
     """
+
     if not to_email:
         return False
 
-    time_str = timestamp or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    subject = "SecureRotate AI — Successful Login"
+    time_str = (
+        timestamp
+        or datetime.now(timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S UTC"
+        )
+    )
+
+    subject = (
+        "SecureRotate AI — Successful Login"
+    )
+
     body = f"""Hello {username},
 
 You have successfully logged into SecureRotate AI.
@@ -150,12 +235,31 @@ If this login was not performed by you, please contact the administrator.
 
 SecureRotate AI
 """
-    success = send_raw_email(to_email, subject, body)
-    
-    event_type = "LOGIN_EMAIL_SENT" if success else "LOGIN_EMAIL_FAILED"
-    status_str = "SUCCESS" if success else "FAILED"
-    details = f"Login notification email {'dispatched' if success else 'failed'} for user '{username}' ({to_email})."
-    
+
+    success = await send_raw_email(
+        to_email=to_email,
+        subject=subject,
+        body=body,
+    )
+
+    event_type = (
+        "LOGIN_EMAIL_SENT"
+        if success
+        else "LOGIN_EMAIL_FAILED"
+    )
+
+    status_str = (
+        "SUCCESS"
+        if success
+        else "FAILED"
+    )
+
+    details = (
+        f"Login notification email "
+        f"{'dispatched' if success else 'failed'} "
+        f"for user '{username}' ({to_email})."
+    )
+
     await log_email_audit(
         event_type=event_type,
         action="SEND_LOGIN_EMAIL",
@@ -163,12 +267,14 @@ SecureRotate AI
         details=details,
         user_id=user_id,
     )
+
     return success
 
 
 # =========================================================================
 # FEATURE 3: SUCCESSFUL ROTATION EMAIL
 # =========================================================================
+
 async def send_rotation_success_email(
     to_email: str,
     credential_name: str,
@@ -183,16 +289,39 @@ async def send_rotation_success_email(
 ) -> bool:
     """
     Dispatches post-rotation success email to credential owner.
-    Strictly excludes raw database passwords.
+
+    The generated database password is NEVER included.
     """
+
     if not to_email:
         return False
 
-    time_str = rotated_at or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    expiry_str = next_expiry or "In 90 Days"
-    latency_str = f"{latency_ms:.2f}" if isinstance(latency_ms, (int, float)) else str(latency_ms)
+    time_str = (
+        rotated_at
+        or datetime.now(timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S UTC"
+        )
+    )
 
-    subject = "SecureRotate AI — Credential Rotation Successful"
+    expiry_str = (
+        next_expiry
+        or "In 90 Days"
+    )
+
+    latency_str = (
+        f"{latency_ms:.2f}"
+        if isinstance(
+            latency_ms,
+            (int, float),
+        )
+        else str(latency_ms)
+    )
+
+    subject = (
+        "SecureRotate AI — "
+        "Credential Rotation Successful"
+    )
+
     body = f"""Hello,
 
 The following credential was successfully rotated:
@@ -230,12 +359,32 @@ Please sign in to SecureRotate AI to securely access/manage the credential accor
 
 SecureRotate AI
 """
-    success = send_raw_email(to_email, subject, body)
-    
-    event_type = "ROTATION_EMAIL_SENT" if success else "ROTATION_EMAIL_FAILED"
-    status_str = "SUCCESS" if success else "FAILED"
-    details = f"Rotation success email {'sent' if success else 'failed'} to owner {to_email} for credential '{credential_name}'."
-    
+
+    success = await send_raw_email(
+        to_email=to_email,
+        subject=subject,
+        body=body,
+    )
+
+    event_type = (
+        "ROTATION_EMAIL_SENT"
+        if success
+        else "ROTATION_EMAIL_FAILED"
+    )
+
+    status_str = (
+        "SUCCESS"
+        if success
+        else "FAILED"
+    )
+
+    details = (
+        f"Rotation success email "
+        f"{'sent' if success else 'failed'} "
+        f"to owner {to_email} "
+        f"for credential '{credential_name}'."
+    )
+
     await log_email_audit(
         event_type=event_type,
         action="SEND_ROTATION_EMAIL",
@@ -244,12 +393,14 @@ SecureRotate AI
         user_id=user_id,
         credential_id=credential_id,
     )
+
     return success
 
 
 # =========================================================================
 # FEATURE 4: FAILED ROTATION EMAIL
 # =========================================================================
+
 async def send_rotation_failed_email(
     to_email: str,
     credential_name: str,
@@ -258,13 +409,25 @@ async def send_rotation_failed_email(
     user_id: Optional[int] = None,
 ) -> bool:
     """
-    Dispatches failed rotation and rollback notice to credential owner.
+    Dispatches failed rotation and rollback notice
+    to credential owner.
     """
+
     if not to_email:
         return False
 
-    time_str = timestamp or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    subject = "SecureRotate AI — Credential Rotation Failed and Rolled Back"
+    time_str = (
+        timestamp
+        or datetime.now(timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S UTC"
+        )
+    )
+
+    subject = (
+        "SecureRotate AI — "
+        "Credential Rotation Failed and Rolled Back"
+    )
+
     body = f"""The credential rotation attempt failed.
 
 Credential:
@@ -291,12 +454,32 @@ Please review SecureRotate AI for details.
 
 SecureRotate AI
 """
-    success = send_raw_email(to_email, subject, body)
-    
-    event_type = "ROTATION_EMAIL_SENT" if success else "ROTATION_EMAIL_FAILED"
-    status_str = "SUCCESS" if success else "FAILED"
-    details = f"Rotation failure notice {'sent' if success else 'failed'} to owner {to_email} for credential '{credential_name}'."
-    
+
+    success = await send_raw_email(
+        to_email=to_email,
+        subject=subject,
+        body=body,
+    )
+
+    event_type = (
+        "ROTATION_EMAIL_SENT"
+        if success
+        else "ROTATION_EMAIL_FAILED"
+    )
+
+    status_str = (
+        "SUCCESS"
+        if success
+        else "FAILED"
+    )
+
+    details = (
+        f"Rotation failure notice "
+        f"{'sent' if success else 'failed'} "
+        f"to owner {to_email} "
+        f"for credential '{credential_name}'."
+    )
+
     await log_email_audit(
         event_type=event_type,
         action="SEND_ROTATION_EMAIL",
@@ -305,12 +488,14 @@ SecureRotate AI
         user_id=user_id,
         credential_id=credential_id,
     )
+
     return success
 
 
 # =========================================================================
 # FEATURE 5: EXPIRY ALERT EMAIL
 # =========================================================================
+
 async def send_expiry_alert_email(
     to_email: str,
     credential_name: str,
@@ -320,20 +505,48 @@ async def send_expiry_alert_email(
     credential_id: Optional[int] = None,
 ) -> bool:
     """
-    Dispatches proactive expiry warning alert to credential owner.
+    Dispatches proactive expiry warning alert
+    to credential owner.
     """
+
     if not to_email:
         return False
 
+    # ---------------------------------------------------------------------
+    # Determine expiry subject
+    # ---------------------------------------------------------------------
+
     if days_remaining <= 0:
-        subject = "SecureRotate AI — Credential Expired"
+
+        subject = (
+            "SecureRotate AI — Credential Expired"
+        )
+
         expires_str = "Expired"
+
     elif days_remaining == 1:
-        subject = "SecureRotate AI — Credential Expires in 1 Day"
+
+        subject = (
+            "SecureRotate AI — "
+            "Credential Expires in 1 Day"
+        )
+
         expires_str = "1 day"
+
     else:
-        subject = f"SecureRotate AI — Credential Expires in {days_remaining} Days"
-        expires_str = f"{days_remaining} days"
+
+        subject = (
+            f"SecureRotate AI — "
+            f"Credential Expires in {days_remaining} Days"
+        )
+
+        expires_str = (
+            f"{days_remaining} days"
+        )
+
+    # ---------------------------------------------------------------------
+    # Email body
+    # ---------------------------------------------------------------------
 
     body = f"""Hello,
 
@@ -355,12 +568,40 @@ Please sign in to SecureRotate AI to manage or rotate this credential.
 
 SecureRotate AI
 """
-    success = send_raw_email(to_email, subject, body)
-    
-    event_type = "EXPIRY_EMAIL_SENT" if success else "EXPIRY_EMAIL_FAILED"
-    status_str = "SUCCESS" if success else "FAILED"
-    details = f"Expiry alert email ({expires_str}) {'sent' if success else 'failed'} to owner {to_email} for '{credential_name}'."
-    
+
+    # ---------------------------------------------------------------------
+    # Dispatch
+    # ---------------------------------------------------------------------
+
+    success = await send_raw_email(
+        to_email=to_email,
+        subject=subject,
+        body=body,
+    )
+
+    # ---------------------------------------------------------------------
+    # Audit
+    # ---------------------------------------------------------------------
+
+    event_type = (
+        "EXPIRY_EMAIL_SENT"
+        if success
+        else "EXPIRY_EMAIL_FAILED"
+    )
+
+    status_str = (
+        "SUCCESS"
+        if success
+        else "FAILED"
+    )
+
+    details = (
+        f"Expiry alert email ({expires_str}) "
+        f"{'sent' if success else 'failed'} "
+        f"to owner {to_email} "
+        f"for '{credential_name}'."
+    )
+
     await log_email_audit(
         event_type=event_type,
         action="SEND_EXPIRY_EMAIL",
@@ -368,4 +609,5 @@ SecureRotate AI
         details=details,
         credential_id=credential_id,
     )
+
     return success
