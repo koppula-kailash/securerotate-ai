@@ -206,14 +206,11 @@ async def send_raw_email(
         return bool(response)
 
     except Exception as error:
-        # Never log exception message because third-party errors
-        # could potentially contain sensitive request information.
         logger.warning(
             "Resend email delivery to %s failed: %s",
             to_email,
-            type(error).__name__,
+            str(error),
         )
-
         return False
 
 
