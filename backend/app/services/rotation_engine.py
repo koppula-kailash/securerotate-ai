@@ -876,14 +876,15 @@ async def execute_credential_rotation(
     try:
         from app.services.email_service import send_rotation_success_email
         await send_rotation_success_email(
-            to_email=owner_email,
-            credential_name=credential.name,
-            database_name=credential.database_name,
-            environment=credential.environment,
-            latency_ms=latency_ms,
-            next_expiry=new_expiry.strftime('%b %d, %Y'),
-            risk_level=new_risk_level,
-            credential_id=credential_id,
+        to_email=owner_email,
+        credential_name=credential.name,
+        database_name=credential.database_name,
+        environment=credential.environment,
+        latency_ms=latency_ms,
+        rotated_at=datetime.now(timezone.utc).isoformat(),
+        next_expiry=new_expiry.isoformat(),
+        risk_level=new_risk_level,
+        credential_id=credential_id,
         )
     except Exception as e:
         logger.warning(f"Error calling send_rotation_success_email: {e}")
