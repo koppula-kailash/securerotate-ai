@@ -21,6 +21,7 @@ Security guarantees:
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
+from zoneinfo import ZoneInfo
 
 import resend
 
@@ -30,6 +31,74 @@ from app.models.audit import AuditLog
 
 
 logger = logging.getLogger("securerotate.email")
+
+
+# =========================================================================
+# TIMEZONE CONFIGURATION
+# =========================================================================
+
+# Backend/database timestamps remain stored in UTC.
+# Only timestamps displayed in emails are converted to IST.
+DISPLAY_TIMEZONE = ZoneInfo("Asia/Kolkata")
+DISPLAY_TIMEZONE_NAME = "IST"
+
+
+def _format_email_datetime(
+    timestamp: Optional[str] = None,
+) -> str:
+    """
+    Convert a timestamp to the configured email display timezone.
+
+    Backend/database timestamps remain UTC.
+    Email timestamps are displayed in IST.
+
+    Supports:
+    - ISO timestamps with Z
+    - ISO timestamps with +00:00
+    - ISO timestamps without timezone information
+    - datetime objects
+    - None
+    """
+
+    try:
+        if timestamp is None:
+            dt = datetime.now(timezone.utc)
+
+        elif isinstance(timestamp, datetime):
+            dt = timestamp
+
+        else:
+            timestamp_str = str(timestamp).strip()
+
+            # Convert trailing Z into a Python-compatible UTC offset.
+            if timestamp_str.endswith("Z"):
+                timestamp_str = timestamp_str[:-1] + "+00:00"
+
+            dt = datetime.fromisoformat(timestamp_str)
+
+        # If the timestamp has no timezone information,
+        # treat it as UTC because the application stores UTC.
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        # Convert UTC-aware datetime to IST.
+        local_dt = dt.astimezone(DISPLAY_TIMEZONE)
+
+        return local_dt.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ) + f" {DISPLAY_TIMEZONE_NAME}"
+
+    except (ValueError, TypeError, OverflowError):
+        # Never allow email formatting problems to interrupt
+        # the parent business operation.
+        logger.warning(
+            "Unable to format email timestamp; "
+            "falling back to UTC."
+        )
+
+        return datetime.now(timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S UTC"
+        )
 
 
 # =========================================================================
@@ -210,12 +279,7 @@ async def send_login_success_email(
     if not to_email:
         return False
 
-    time_str = (
-        timestamp
-        or datetime.now(timezone.utc).strftime(
-            "%Y-%m-%d %H:%M:%S UTC"
-        )
-    )
+    time_str = _format_email_datetime(timestamp)
 
     subject = (
         "SecureRotate AI — Successful Login"
@@ -296,17 +360,14 @@ async def send_rotation_success_email(
     if not to_email:
         return False
 
-    time_str = (
-        rotated_at
-        or datetime.now(timezone.utc).strftime(
-            "%Y-%m-%d %H:%M:%S UTC"
-        )
-    )
+    # Convert rotation timestamp to IST for email display.
+    time_str = _format_email_datetime(rotated_at)
 
-    expiry_str = (
-        next_expiry
-        or "In 90 Days"
-    )
+    # Convert expiry timestamp to IST for email display.
+    if next_expiry:
+        expiry_str = _format_email_datetime(next_expiry)
+    else:
+        expiry_str = "In 90 Days"
 
     latency_str = (
         f"{latency_ms:.2f}"
@@ -416,12 +477,7 @@ async def send_rotation_failed_email(
     if not to_email:
         return False
 
-    time_str = (
-        timestamp
-        or datetime.now(timezone.utc).strftime(
-            "%Y-%m-%d %H:%M:%S UTC"
-        )
-    )
+    time_str = _format_email_datetime(timestamp)
 
     subject = (
         "SecureRotate AI — "
